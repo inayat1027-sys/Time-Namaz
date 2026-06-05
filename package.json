@@ -1,0 +1,26 @@
+{
+  "name": "namaz-time-app",
+  "displayName": "Время Намаза",
+  "version": "1.0.0",
+  "description": "Расписание молитв с локальными уведомлениями и виджетом главного экрана",
+  "main": "index.js",
+  "scripts": {
+    "build": "cordova build android",
+    "build:debug": "cordova build android --debug",
+    "build:release": "cordova build android --release"
+  },
+  "author": "Namaz Time",
+  "license": "MIT",
+  "devDependencies": {
+    "cordova-android": "13.0.0"
+  },
+  "cordova": {
+    "platforms": ["android"],
+    "plugins": {
+      "cordova-plugin-whitelist": {},
+      "cordova-plugin-androidx-adapter": {},
+      "cordova-plugin-local-notification": {},
+      "cordova-plugin-device": {}
+    }
+  }
+}

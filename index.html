@@ -1,0 +1,1320 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Виджет Намаза</title>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="cordova.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: radial-gradient(circle at 50% 30%, #0c331a 0%, #061f10 60%, #020d06 100%);
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        body::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            opacity: 0.12;
+            background-color: #dfb743;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='36' height='36' viewBox='0 0 36 36'%3E%3Cpath fill='%23ffffff' fill-opacity='1' d='M18 0l18 18L18 36 0 18zM18 5.2L5.2 18 18 30.8 30.8 18zM18 11a7 7 0 1 0 0 14 7 7 0 0 0 0-14zm0 3a4 4 0 1 1 0 8 4 4 0 0 1 0-8z'/%3E%3C/svg%3E");
+            z-index: 1;
+        }
+
+        .bg-mandala {
+            position: absolute;
+            top: 45%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 95vw;
+            max-width: 500px;
+            height: auto;
+            opacity: 0.04;
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        .app-content {
+            flex: 1;
+            position: relative;
+            z-index: 10;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            padding-bottom: 75px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .view {
+            display: none;
+            padding: 20px;
+            min-height: 100%;
+            width: 100%;
+        }
+
+        .view.active-view {
+            display: flex;
+            flex-direction: column;
+        }
+
+        #view-main.active-view, #view-settings.active-view {
+            align-items: center;
+            justify-content: center;
+        }
+
+        .empty-state {
+            text-align: center;
+            color: #dfb743;
+            font-size: 16px;
+            background: rgba(12, 51, 26, 0.6);
+            padding: 20px 30px;
+            border-radius: 24px;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(223, 183, 67, 0.3);
+            margin: auto;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .unified-widget, .circle-widget {
+            display: none;
+            flex-direction: column;
+            width: 100%;
+            max-width: 360px;
+            background: linear-gradient(135deg, #092213 0%, #04130a 100%);
+            border-radius: 32px;
+            padding: 24px 22px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.6);
+            z-index: 10;
+            border: 1px solid rgba(223, 183, 67, 0.25);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .unified-widget::before, .circle-widget::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            opacity: 0.03;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath fill='%23fff' d='M12 0l3 9 9 3-9 3-3 9-3-9-9-3 9-3z'/%3E%3C/svg%3E");
+            pointer-events: none;
+        }
+
+        .widget-top-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            padding: 0 4px;
+            position: relative;
+            z-index: 2;
+        }
+
+        .widget-side-block {
+            display: flex;
+            flex-direction: column;
+            min-width: 65px;
+        }
+
+        .widget-side-block.left { align-items: flex-start; }
+        .widget-side-block.right { align-items: flex-end; }
+
+        .widget-label-left {
+            font-size: 16px;
+            font-weight: 700;
+            color: #dfb743;
+            margin-bottom: 4px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .widget-time-left {
+            font-size: 19px;
+            font-weight: 700;
+            color: #dfb743;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .widget-label-right {
+            font-size: 16px;
+            font-weight: 600;
+            color: #ffffff;
+            opacity: 0.9;
+            margin-bottom: 4px;
+        }
+
+        .widget-time-right {
+            font-size: 19px;
+            font-weight: 600;
+            color: #ffffff;
+            opacity: 0.9;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .widget-center-block {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .widget-countdown-text {
+            font-size: 12px;
+            color: #ffffff;
+            opacity: 0.5;
+            margin-bottom: 2px;
+            text-transform: lowercase;
+            letter-spacing: 0.5px;
+        }
+
+        .widget-main-timer {
+            font-size: 32px;
+            font-weight: 700;
+            color: #ffffff;
+            font-variant-numeric: tabular-nums;
+            line-height: 1;
+            letter-spacing: -0.5px;
+            text-shadow: 0 0 10px rgba(255,255,255,0.2);
+        }
+
+        .widget-divider {
+            height: 1px;
+            background: linear-gradient(to right, rgba(223,183,67,0), rgba(223,183,67,0.4) 50%, rgba(223,183,67,0));
+            margin: 0 -22px 16px -22px;
+        }
+
+        .widget-bottom-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 4px;
+            position: relative;
+            z-index: 2;
+            width: 100%;
+        }
+
+        .daily-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+            color: #ffffff;
+            opacity: 0.4;
+            transition: opacity 0.3s, color 0.3s, transform 0.3s;
+        }
+
+        .daily-item .name { font-weight: 500; font-size: 11px; }
+        .daily-item .time { font-weight: 600; font-size: 13px; font-variant-numeric: tabular-nums; }
+        .daily-item.active { opacity: 1; color: #dfb743; transform: scale(1.05); }
+
+        .circle-widget {
+            padding: 30px 22px 24px 22px;
+            align-items: center;
+        }
+
+        .circle-header {
+            display: flex;
+            width: 100%;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .circle-header-block {
+            display: flex;
+            flex-direction: column;
+        }
+        .circle-header-block.left { align-items: flex-start; }
+        .circle-header-block.right { align-items: flex-end; }
+
+        .circle-title { font-size: 14px; opacity: 0.6; font-weight: 500; }
+        .circle-time { font-size: 20px; font-weight: 700; color: #dfb743; margin-top: 2px; }
+        .circle-time.next { color: #ffffff; }
+
+        .progress-container {
+            position: relative;
+            width: 190px;
+            height: 190px;
+            margin: 10px 0 25px 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .progress-circle {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: conic-gradient(from 0deg, #1e7a53 0%, transparent 0%);
+            transition: background 0.1s linear;
+        }
+
+        .progress-inner {
+            position: absolute;
+            width: 166px;
+            height: 166px;
+            background: #05160c;
+            border-radius: 50%;
+            z-index: 2;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            box-shadow: inset 0 4px 12px rgba(0,0,0,0.5);
+        }
+
+        .inner-countdown-label {
+            font-size: 11px;
+            opacity: 0.5;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 4px;
+        }
+
+        .inner-timer {
+            font-size: 28px;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+            color: #ffffff;
+        }
+
+        .inner-status-text {
+            font-size: 12px;
+            color: #dfb743;
+            margin-top: 6px;
+            font-weight: 600;
+        }
+
+        .schedule-table-container {
+            background: rgba(5, 23, 12, 0.85);
+            padding: 0;
+            border-radius: 24px;
+            width: 100%;
+            display: none;
+            border: 1px solid rgba(223, 183, 67, 0.2);
+            max-height: calc(100vh - 150px);
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+        
+        table { border-collapse: collapse; width: 100%; table-layout: fixed; }
+        th, td { text-align: center; font-size: clamp(10px, 2.5vw, 13px); padding: 14px 2px; word-wrap: break-word; }
+        
+        th { 
+            color: #dfb743; 
+            font-weight: 600;
+            border-bottom: 2px solid rgba(223, 183, 67, 0.3);
+            position: sticky;
+            top: 0;
+            background: #092414;
+            z-index: 2;
+        }
+
+        th:first-child { border-top-left-radius: 24px; padding-left: 6px; }
+        th:last-child { border-top-right-radius: 24px; padding-right: 6px; }
+        td:first-child { padding-left: 6px; font-weight: bold; color: #dfb743;}
+        td:last-child { padding-right: 6px; }
+        
+        td { color: #fff; border-bottom: 1px solid rgba(255,255,255,0.04); }
+        tr.active-row td { background: rgba(223, 183, 67, 0.15); font-weight: bold; color: #fff; border-top: 1px solid rgba(223,183,67,0.3); border-bottom: 1px solid rgba(223,183,67,0.3); }
+
+        tr:last-child td:first-child { border-bottom-left-radius: 24px; }
+        tr:last-child td:last-child { border-bottom-right-radius: 24px; }
+
+        .settings-card {
+            background: rgba(5, 23, 12, 0.85);
+            padding: 20px;
+            border-radius: 24px;
+            text-align: center;
+            width: 100%;
+            max-width: 400px;
+            border: 1px solid rgba(223, 183, 67, 0.2);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            max-height: calc(100vh - 120px);
+            overflow-y: auto;
+        }
+        
+        .settings-card h2 { font-size: 18px; color: #dfb743; }
+
+        .widget-selector-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #ffffff;
+            text-align: left;
+            margin-bottom: 8px;
+            opacity: 0.9;
+        }
+
+        .widget-options {
+            display: flex;
+            gap: 12px;
+            width: 100%;
+        }
+
+        .widget-opt-btn {
+            flex: 1;
+            padding: 10px;
+            border-radius: 12px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(223, 183, 67, 0.15);
+            color: #ffffff;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .widget-opt-btn.selected {
+            background: rgba(223, 183, 67, 0.2);
+            border-color: #dfb743;
+            color: #dfb743;
+            box-shadow: 0 0 10px rgba(223,183,67,0.15);
+        }
+
+        .sync-block {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            width: 100%;
+        }
+
+        .upload-label, .download-template-btn {
+            color: #05170c;
+            padding: 10px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 700;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: transform 0.2s, box-shadow 0.2s;
+            width: 100%;
+            border: none;
+        }
+        .upload-label {
+            background: linear-gradient(135deg, #dfb743 0%, #b89225 100%);
+            box-shadow: 0 5px 15px rgba(223, 183, 67, 0.3);
+        }
+        .download-template-btn {
+            background: linear-gradient(135deg, #ffffff 0%, #d4d4d4 100%);
+            box-shadow: 0 5px 15px rgba(255, 255, 255, 0.1);
+            color: #333;
+            text-decoration: none;
+        }
+        .upload-label:hover, .download-template-btn:hover { transform: translateY(-2px); }
+        #excelFile { display: none; }
+
+        .delete-btn {
+            background: rgba(235, 87, 87, 0.1);
+            border: 1px solid rgba(235, 87, 87, 0.4);
+            color: #eb5757;
+            padding: 10px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.2s;
+            width: 100%;
+        }
+        .delete-btn:hover { background: rgba(235, 87, 87, 0.2); border-color: #eb5757; }
+
+        .notification-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(223, 183, 67, 0.15);
+            border-radius: 18px;
+            padding: 12px;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .notification-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+        }
+
+        .notif-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.02);
+            padding: 8px 10px;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.04);
+        }
+
+        .notif-name { font-size: 13px; font-weight: 600; color: #fff; }
+
+        .test-push-btn {
+            background: rgba(30, 122, 83, 0.2);
+            border: 1px solid rgba(30, 122, 83, 0.5);
+            color: #2aab74;
+            padding: 8px;
+            border-radius: 10px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            transition: all 0.2s;
+        }
+        .test-push-btn:hover { background: rgba(30, 122, 83, 0.3); }
+
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 36px;
+            height: 20px;
+        }
+
+        .switch input { opacity: 0; width: 0; height: 0; }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            inset: 0;
+            background-color: rgba(255,255,255,0.15);
+            transition: .3s;
+            border-radius: 20px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .slider::before {
+            position: absolute;
+            content: "";
+            height: 14px;
+            width: 14px;
+            left: 2px;
+            bottom: 2px;
+            background-color: white;
+            transition: .3s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider { background-color: #1e7a53; border-color: #2aab74; }
+        input:checked + .slider::before { transform: translateX(16px); background-color: #dfb743; }
+
+        .support-channels {
+            display: flex;
+            gap: 12px;
+            width: 100%;
+        }
+
+        .support-btn {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 10px;
+            border-radius: 12px;
+            font-size: 13px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: transform 0.2s, opacity 0.2s;
+        }
+        .support-btn:hover { transform: translateY(-1px); opacity: 0.9; }
+
+        .support-btn.whatsapp { background: #25D366; color: #fff; }
+        .support-btn.telegram { background: #0088cc; color: #fff; }
+
+        .bottom-nav {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 65px;
+            background: rgba(4, 15, 8, 0.95);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            border-top: 1px solid rgba(223, 183, 67, 0.2);
+            z-index: 100;
+            padding-bottom: env(safe-area-inset-bottom);
+        }
+
+        .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 33%;
+            height: 100%;
+            color: #6a8c78;
+            background: none;
+            border: none;
+            font-size: 11px;
+            font-weight: 500;
+            gap: 4px;
+            cursor: pointer;
+            transition: color 0.3s;
+        }
+
+        .nav-item svg { width: 24px; height: 24px; fill: currentColor; transition: transform 0.2s, fill 0.3s; }
+        .nav-item.active { color: #dfb743; }
+        .nav-item.active svg { transform: scale(1.1); fill: #dfb743; }
+    </style>
+</head>
+<body>
+
+    <svg class="bg-mandala" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="50" cy="50" r="45" fill="none" stroke="#dfb743" stroke-width="0.5"/>
+        <circle cx="50" cy="50" r="38" fill="none" stroke="#dfb743" stroke-width="0.2" stroke-dasharray="1,1"/>
+        <g stroke="#dfb743" stroke-width="0.3" fill="none">
+            <path d="M50,5 C55,25 45,25 50,5 Z M50,95 C55,75 45,75 50,95 Z M5,50 C25,55 25,45 5,50 Z M95,50 C75,55 75,45 95,50 Z"/>
+            <path d="M18.2,18.2 C32.3,32.3 25.3,39.3 18.2,18.2 Z M81.8,81.8 C67.7,67.7 74.7,60.7 81.8,81.8 Z M18.2,81.8 C32.3,67.7 25.3,60.7 18.2,81.8 Z M81.8,18.2 C67.7,32.3 74.7,39.3 81.8,18.2 Z"/>
+        </g>
+        <circle cx="50" cy="50" r="8" fill="none" stroke="#dfb743" stroke-width="0.4"/>
+    </svg>
+
+    <div class="app-content" id="appContent">
+        
+        <div id="view-main" class="view active-view">
+            <div id="emptyStateMain" class="empty-state">
+                Загрузите файл с расписанием в разделе "Настройки"
+            </div>
+
+            <div class="unified-widget" id="widgetContainer1">
+                <div class="widget-top-row">
+                    <div class="widget-side-block left">
+                        <span class="widget-label-left" id="mainName1">--</span>
+                        <span class="widget-time-left" id="mainTime1">00:00</span>
+                    </div>
+                    
+                    <div class="widget-center-block">
+                        <span class="widget-countdown-text">осталось</span>
+                        <span class="widget-main-timer" id="timerValue1">00:00:00</span>
+                    </div>
+
+                    <div class="widget-side-block right">
+                        <span class="widget-label-right" id="subName1">--</span>
+                        <span class="widget-time-right" id="subTime1">00:00</span>
+                    </div>
+                </div>
+
+                <div class="widget-divider"></div>
+
+                <div class="widget-bottom-row" id="bottomRow1">
+                    <div class="daily-item" id="w1-day-fajr">
+                        <span class="name">Фаджр</span><span class="time" id="w1-time-fajr">--:--</span>
+                    </div>
+                    <div class="daily-item" id="w1-day-sunrise">
+                        <span class="name">Восход</span><span class="time" id="w1-time-sunrise">--:--</span>
+                    </div>
+                    <div class="daily-item" id="w1-day-dhuhr">
+                        <span class="name">Зухр</span><span class="time" id="w1-time-dhuhr">--:--</span>
+                    </div>
+                    <div class="daily-item" id="w1-day-asr">
+                        <span class="name">Аср</span><span class="time" id="w1-time-asr">--:--</span>
+                    </div>
+                    <div class="daily-item" id="w1-day-maghrib">
+                        <span class="name">Магриб</span><span class="time" id="w1-time-maghrib">--:--</span>
+                    </div>
+                    <div class="daily-item" id="w1-day-isha">
+                        <span class="name">Иша</span><span class="time" id="w1-time-isha">--:--</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="circle-widget" id="widgetContainer2">
+                <div class="circle-header">
+                    <div class="circle-header-block left">
+                        <span class="circle-title">Текущий</span>
+                        <span class="circle-time" id="mainName2">-- : --</span>
+                    </div>
+                    <div class="circle-header-block right">
+                        <span class="circle-title">Следующий</span>
+                        <span class="circle-time next" id="subName2">-- : --</span>
+                    </div>
+                </div>
+
+                <div class="progress-container">
+                    <div class="progress-circle" id="progressCircle"></div>
+                    <div class="progress-inner">
+                        <span class="inner-countdown-label">Осталось</span>
+                        <span class="inner-timer" id="timerValue2">00:00:00</span>
+                        <span class="inner-status-text" id="statusLabel">--</span>
+                    </div>
+                </div>
+
+                <div class="widget-divider"></div>
+
+                <div class="widget-bottom-row" id="bottomRow2">
+                    <div class="daily-item" id="w2-day-fajr">
+                        <span class="name">Фаджр</span><span class="time" id="w2-time-fajr">--:--</span>
+                    </div>
+                    <div class="daily-item" id="w2-day-sunrise">
+                        <span class="name">Восход</span><span class="time" id="w2-time-sunrise">--:--</span>
+                    </div>
+                    <div class="daily-item" id="w2-day-dhuhr">
+                        <span class="name">Зухр</span><span class="time" id="w2-time-dhuhr">--:--</span>
+                    </div>
+                    <div class="daily-item" id="w2-day-asr">
+                        <span class="name">Аср</span><span class="time" id="w2-time-asr">--:--</span>
+                    </div>
+                    <div class="daily-item" id="w2-day-maghrib">
+                        <span class="name">Магриб</span><span class="time" id="w2-time-maghrib">--:--</span>
+                    </div>
+                    <div class="daily-item" id="w2-day-isha">
+                        <span class="name">Иша</span><span class="time" id="w2-time-isha">--:--</span>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <div id="view-table" class="view">
+            <div id="emptyStateTable" class="empty-state">
+                Таблица недоступна.<br>Загрузите расписание в Настройках.
+            </div>
+
+            <div class="schedule-table-container" id="tableContainer">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>День</th>
+                            <th>Фаджр</th>
+                            <th>Восход</th>
+                            <th>Зухр</th>
+                            <th>Аср</th>
+                            <th>Магриб</th>
+                            <th>Иша</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="view-settings" class="view">
+            <div class="settings-card">
+                <h2>Настройки</h2>
+                
+                <div style="text-align: left; width: 100%;">
+                    <div class="widget-selector-title">Стиль виджета</div>
+                    <div class="widget-options">
+                        <button class="widget-opt-btn selected" id="opt-w1" onclick="setWidgetStyle(1)">Виджет 1</button>
+                        <button class="widget-opt-btn" id="opt-w2" onclick="setWidgetStyle(2)">Виджет 2</button>
+                    </div>
+                </div>
+
+                <hr style="border: none; height: 1px; background: rgba(223,183,67,0.2); width: 100%;">
+
+                <div>
+                    <div class="widget-selector-title">Данные и Шаблоны</div>
+                    
+                    <div class="sync-block" style="gap: 12px;">
+                        <button class="download-template-btn" onclick="downloadExcelTemplate()">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                            Скачать шаблон Excel
+                        </button>
+
+                        <label for="excelFile" class="upload-label" id="uploadLabelBtn">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                            Загрузить заполненный Excel
+                        </label>
+                        <input type="file" id="excelFile" accept=".xlsx, .xls">
+
+                        <button class="delete-btn" id="deleteFileBtn" onclick="deleteScheduleData()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                            Удалить расписание
+                        </button>
+                    </div>
+                </div>
+
+                <hr style="border: none; height: 1px; background: rgba(223,183,67,0.2); width: 100%;">
+
+                <div style="text-align: left; width: 100%;">
+                    <div class="widget-selector-title">Уведомления</div>
+                    <div class="notification-card">
+                        <div class="notification-grid">
+                            <div class="notif-item">
+                                <span class="notif-name">Фаджр</span>
+                                <label class="switch"><input type="checkbox" id="notif-fajr" onchange="saveNotificationSettings()"><span class="slider"></span></label>
+                            </div>
+                            <div class="notif-item">
+                                <span class="notif-name">Восход</span>
+                                <label class="switch"><input type="checkbox" id="notif-sunrise" onchange="saveNotificationSettings()"><span class="slider"></span></label>
+                            </div>
+                            <div class="notif-item">
+                                <span class="notif-name">Зухр</span>
+                                <label class="switch"><input type="checkbox" id="notif-dhuhr" onchange="saveNotificationSettings()"><span class="slider"></span></label>
+                            </div>
+                            <div class="notif-item">
+                                <span class="notif-name">Аср</span>
+                                <label class="switch"><input type="checkbox" id="notif-asr" onchange="saveNotificationSettings()"><span class="slider"></span></label>
+                            </div>
+                            <div class="notif-item">
+                                <span class="notif-name">Магриб</span>
+                                <label class="switch"><input type="checkbox" id="notif-maghrib" onchange="saveNotificationSettings()"><span class="slider"></span></label>
+                            </div>
+                            <div class="notif-item">
+                                <span class="notif-name">Иша</span>
+                                <label class="switch"><input type="checkbox" id="notif-isha" onchange="saveNotificationSettings()"><span class="slider"></span></label>
+                            </div>
+                        </div>
+                        <button class="test-push-btn" onclick="sendTestNotification()">Проверить моментальный пуш</button>
+                    </div>
+                </div>
+
+                <hr style="border: none; height: 1px; background: rgba(223,183,67,0.2); width: 100%;">
+
+                <div style="text-align: left; width: 100%;">
+                    <div class="widget-selector-title">Поддержка</div>
+                    <div class="support-channels">
+                        <a href="https://wa.me/79196735586" target="_blank" class="support-btn whatsapp">WhatsApp</a>
+                        <a href="https://t.me/tm_faktt" target="_blank" class="support-btn telegram">Telegram</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <nav class="bottom-nav">
+        <button class="nav-item active" onclick="switchTab('main', this)">
+            <svg viewBox="0 0 24 24"><path d="M12 3L4 9V21H9V14H15V21H20V9L12 3Z"/></svg>
+            Главная
+        </button>
+        <button class="nav-item" onclick="switchTab('table', this)">
+            <svg viewBox="0 0 24 24"><path d="M3 3H21V21H3V3ZM5 5V9H19V5H5ZM5 11V19H19V11H5ZM7 13H11V17H7V13ZM13 13H17V17H13V13Z"/></svg>
+            Таблица
+        </button>
+        <button class="nav-item" onclick="switchTab('settings', this)">
+            <svg viewBox="0 0 24 24"><path d="M19.4 13C19.5 12.7 19.5 12.3 19.5 12C19.5 11.7 19.5 11.3 19.4 11L21.5 9.3C21.7 9.1 21.8 8.9 21.7 8.6L19.7 5.1C19.6 4.9 19.3 4.8 19.1 4.9L16.6 5.9C16 5.5 15.4 5.2 14.7 4.9L14.3 2.2C14.3 2 14.1 1.8 13.8 1.8H9.8C9.6 1.8 9.4 2 9.4 2.2L9 4.9C8.3 5.2 7.7 5.5 7.1 5.9L4.6 4.9C4.4 4.8 4.1 4.9 4 5.1L2 8.6C1.9 8.9 2 9.1 2.2 9.3L4.3 11C4.2 11.3 4.2 11.7 4.2 12C4.2 12.3 4.2 12.7 4.3 13L2.2 14.7C2 14.9 1.9 15.1 2 15.4L4 18.9C4.1 19.1 4.4 19.2 4.6 19.1L7.1 18.1C7.7 18.5 8.3 18.8 9 19.1L9.4 21.8C9.4 22 9.6 22.2 9.8 22.2H13.8C14.1 22.2 14.3 22 14.3 21.8L14.7 19.1C15.4 18.8 16 18.5 16.6 18.1L19.1 19.1C19.3 19.2 19.6 19.1 19.7 18.9L21.7 15.4C21.8 15.1 21.7 14.9 21.5 14.7L19.4 13ZM11.8 15.5C9.8 15.5 8.3 14 8.3 12C8.3 10 9.8 8.5 11.8 8.5C13.8 8.5 15.3 10 15.3 12C15.3 14 13.8 15.5 11.8 15.5Z"/></svg>
+            Настройки
+        </button>
+    </nav>
+
+    <script>
+        let monthlySchedule = {};
+        const allKeys = ['fajr', 'sunrise', 'dhuhr', 'asr', 'maghrib', 'isha'];
+        const keyNamesRu = { fajr: 'Фаджр', sunrise: 'Восход', dhuhr: 'Зухр', asr: 'Аср', maghrib: 'Магриб', isha: 'Иша' };
+        let widgetInterval = null;
+        let currentWidgetStyle = 1; 
+        
+        const fileInput = document.getElementById('excelFile');
+        const appContent = document.getElementById('appContent');
+
+        // Ждем загрузки Cordova
+        document.addEventListener('deviceready', () => {
+            console.log("Cordova готова. Нативные функции активированы.");
+            if (window.cordova && cordova.plugins && cordova.plugins.notification) {
+                // 1) Запрашиваем разрешение POST_NOTIFICATIONS (Android 13+)
+                cordova.plugins.notification.local.requestPermission((granted) => {
+                    console.log("Доступ к уведомлениям:", granted);
+                    if (!granted) {
+                        console.warn("Пользователь не дал разрешение на уведомления.");
+                    }
+                });
+                // 2) Создаём канал для Android 8+ (без канала уведомления не показываются)
+                if (cordova.plugins.notification.local.createChannel) {
+                    cordova.plugins.notification.local.createChannel({
+                        id: 'prayer_channel',
+                        name: 'Время намаза',
+                        description: 'Уведомления о времени молитвы',
+                        importance: 5,        // IMPORTANCE_HIGH — звук + всплывающее
+                        sound: true,
+                        vibration: true,
+                        badge: true
+                    }, () => console.log("Канал prayer_channel создан"));
+                }
+                // 3) Если данные уже есть — перерегистрируем уведомления на этот запуск
+                if (Object.keys(monthlySchedule).length > 0) {
+                    scheduleNativeNotifications();
+                }
+            }
+        }, false);
+
+        function switchTab(tabId, btnElement) {
+            document.querySelectorAll('.view').forEach(el => el.classList.remove('active-view'));
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+            
+            document.getElementById('view-' + tabId).classList.add('active-view');
+            btnElement.classList.add('active');
+            
+            appContent.scrollTop = 0;
+            
+            if (tabId === 'table') {
+                setTimeout(() => {
+                    const activeRow = document.querySelector('.active-row');
+                    if (activeRow) {
+                        activeRow.scrollIntoView({ block: 'center', behavior: 'smooth' });
+                    }
+                }, 50);
+            }
+        }
+
+        function setWidgetStyle(styleNum) {
+            currentWidgetStyle = styleNum;
+            localStorage.setItem('namaz_widget_style', styleNum);
+            
+            document.getElementById('opt-w1').classList.toggle('selected', styleNum === 1);
+            document.getElementById('opt-w2').classList.toggle('selected', styleNum === 2);
+            
+            if (Object.keys(monthlySchedule).length > 0) {
+                renderActiveWidgetVisibility();
+            }
+        }
+
+        function renderActiveWidgetVisibility() {
+            if (currentWidgetStyle === 1) {
+                document.getElementById('widgetContainer1').style.display = 'flex';
+                document.getElementById('widgetContainer2').style.display = 'none';
+            } else {
+                document.getElementById('widgetContainer1').style.display = 'none';
+                document.getElementById('widgetContainer2').style.display = 'flex';
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            const savedStyle = localStorage.getItem('namaz_widget_style');
+            if (savedStyle) {
+                setWidgetStyle(parseInt(savedStyle));
+            }
+
+            loadNotificationSettings();
+
+            const savedData = localStorage.getItem('namaz_saved_schedule');
+            if (savedData) {
+                try {
+                    monthlySchedule = JSON.parse(savedData);
+                    if (Object.keys(monthlySchedule).length > 0) {
+                        applyLoadedData();
+                    }
+                } catch (e) {
+                    localStorage.removeItem('namaz_saved_schedule');
+                    resetToEmptyState();
+                }
+            } else {
+                resetToEmptyState();
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, {type: 'array'});
+                    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet, {header: 1});
+                    
+                    const tempSchedule = {};
+                    jsonData.forEach(row => {
+                        if (row && row.length >= 7) {
+                            const day = parseInt(row[0]);
+                            if (!isNaN(day) && day >= 1 && day <= 31) {
+                                tempSchedule[day] = {
+                                    fajr: formatTime(row[1]),
+                                    sunrise: formatTime(row[2]),
+                                    dhuhr: formatTime(row[3]),
+                                    asr: formatTime(row[4]),
+                                    maghrib: formatTime(row[5]),
+                                    isha: formatTime(row[6])
+                                };
+                            }
+                        }
+                    });
+
+                    if (Object.keys(tempSchedule).length > 0) {
+                        monthlySchedule = tempSchedule;
+                        localStorage.setItem('namaz_saved_schedule', JSON.stringify(monthlySchedule));
+                        applyLoadedData();
+                        
+                        // Перестраиваем нативный фоновый календарь уведомлений Android
+                        scheduleNativeNotifications();
+
+                        alert("Расписание успешно сохранено и уведомления обновлены!");
+                        switchTab('main', document.querySelector('.nav-item'));
+                    } else {
+                        alert("Неверная структура таблицы Excel.");
+                    }
+                } catch(err) {
+                    alert("Ошибка при обработке файла.");
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        });
+
+        function formatTime(val) {
+            if (!val) return "00:00";
+            let str = String(val).trim();
+            if (str.includes(':')) {
+                const parts = str.split(':');
+                return `${parseInt(parts[0])}:${parts[1].padStart(2, '0')}`;
+            }
+            return str;
+        }
+
+        function applyLoadedData() {
+            document.getElementById('emptyStateMain').style.display = 'none';
+            document.getElementById('emptyStateTable').style.display = 'none';
+            
+            renderActiveWidgetVisibility();
+            document.getElementById('tableContainer').style.display = 'block';
+            
+            document.getElementById('deleteFileBtn').style.display = 'flex';
+            document.getElementById('uploadLabelBtn').style.display = 'none';
+            
+            buildTable();
+            
+            if (widgetInterval) clearInterval(widgetInterval);
+            widgetInterval = setInterval(updateWidgetLogic, 1000);
+            updateWidgetLogic();
+        }
+
+        function deleteScheduleData() {
+            if (confirm("Вы уверены, что хотите удалить загруженное расписание?")) {
+                localStorage.removeItem('namaz_saved_schedule');
+                monthlySchedule = {};
+                if (widgetInterval) clearInterval(widgetInterval);
+                fileInput.value = ""; 
+                
+                // Отменяем все системные уведомления
+                if (window.cordova && cordova.plugins && cordova.plugins.notification) {
+                    cordova.plugins.notification.local.cancelAll();
+                }
+
+                resetToEmptyState();
+                alert("Расписание и уведомления полностью удалены.");
+            }
+        }
+
+        function resetToEmptyState() {
+            document.getElementById('emptyStateMain').style.display = 'block';
+            document.getElementById('emptyStateTable').style.display = 'block';
+            
+            document.getElementById('widgetContainer1').style.display = 'none';
+            document.getElementById('widgetContainer2').style.display = 'none';
+            document.getElementById('tableContainer').style.display = 'none';
+            
+            document.getElementById('deleteFileBtn').style.display = 'none';
+            document.getElementById('uploadLabelBtn').style.display = 'flex';
+        }
+
+        function saveNotificationSettings() {
+            const config = {};
+            allKeys.forEach(key => {
+                config[key] = document.getElementById(`notif-${key}`).checked;
+            });
+            localStorage.setItem('namaz_notif_config', JSON.stringify(config));
+            
+            // Если данные уже есть, перерегистрируем уведомления с учетом настроек
+            if (Object.keys(monthlySchedule).length > 0) {
+                scheduleNativeNotifications();
+            }
+        }
+
+        function loadNotificationSettings() {
+            const savedConfig = localStorage.getItem('namaz_notif_config');
+            if (savedConfig) {
+                try {
+                    const config = JSON.parse(savedConfig);
+                    allKeys.forEach(key => {
+                        if (config[key] !== undefined) {
+                            document.getElementById(`notif-${key}`).checked = config[key];
+                        }
+                    });
+                } catch(e) {}
+            } else {
+                allKeys.forEach(key => {
+                    document.getElementById(`notif-${key}`).checked = true;
+                });
+            }
+        }
+
+        // ПЛАНИРОВАНИЕ НА ТЕЛЕФОНЕ (Работает даже при закрытом приложении)
+        function scheduleNativeNotifications() {
+            if (!window.cordova || !cordova.plugins || !cordova.plugins.notification) return;
+
+            // Сбрасываем старые
+            cordova.plugins.notification.local.cancelAll();
+
+            const notifConfig = JSON.parse(localStorage.getItem('namaz_notif_config') || '{}');
+            const now = new Date();
+            let currentId = 1;
+            let notificationsArray = [];
+
+            // Планируем азаны на текущий месяц (на каждый доступный в базе день)
+            for (let d = 1; d <= 31; d++) {
+                if (!monthlySchedule[d]) break;
+                
+                // Пропускаем дни, которые уже прошли в этом месяце
+                if (d < now.getDate()) continue;
+
+                allKeys.forEach(key => {
+                    // Проверяем, включен ли этот намаз в настройках
+                    if (notifConfig[key] === false) return; 
+
+                    const [hrs, mins] = monthlySchedule[d][key].split(':').map(Number);
+                    const targetDate = new Date(now.getFullYear(), now.getMonth(), d, hrs, mins, 0);
+
+                    // Если сегодня, но время уже ушло — не планируем на сегодня
+                    if (d === now.getDate() && targetDate <= now) return;
+
+                    notificationsArray.push({
+                        id: currentId++,
+                        title: `Время намаза: ${keyNamesRu[key]}`,
+                        text: `Наступило время для молитвы ${keyNamesRu[key]} (${monthlySchedule[d][key]})`,
+                        trigger: { at: targetDate },
+                        channel: 'prayer_channel',
+                        priority: 2,                    // PRIORITY_MAX
+                        foreground: true,
+                        vibrate: true,
+                        wakeup: true,                   // Разбудить устройство
+                        androidAllowWhileIdle: true,    // КРИТИЧНО: пробивает Doze-режим
+                        sound: "res://platform_default",
+                        smallIcon: "res://icon",
+                        icon: "res://icon"
+                    });
+                });
+            }
+
+            if (notificationsArray.length > 0) {
+                // Регистрируем пачку в ОС Android
+                cordova.plugins.notification.local.schedule(notificationsArray, () => {
+                    console.log(`Запланировано уведомлений: ${notificationsArray.length}`);
+                });
+            }
+        }
+
+        // МОМЕНТАЛЬНЫЙ ТЕСТОВЫЙ ПУШ
+        function sendTestNotification() {
+            if (window.cordova && cordova.plugins && cordova.plugins.notification) {
+                cordova.plugins.notification.local.schedule({
+                    id: 999999,
+                    title: 'Время Намаза',
+                    text: 'Система нативных уведомлений настроена и работает корректно!',
+                    channel: 'prayer_channel',
+                    priority: 2,
+                    foreground: true,
+                    vibrate: true,
+                    smallIcon: "res://icon",
+                    icon: "res://icon"
+                });
+            } else {
+                if ("Notification" in window && Notification.permission === "granted") {
+                    new Notification("Время Намаза", { body: "Тест в браузере прошел успешно!" });
+                } else {
+                    alert("Нативные функции пушей доступны только внутри скомпилированного APK.");
+                }
+            }
+        }
+
+
+
+        // ФУНКЦИЯ СКАЧИВАНИЯ ШАБЛОНА EXCEL
+        function downloadExcelTemplate() {
+            const headers = [["День", "Фаджр", "Восход", "Зухр", "Аср", "Магриб", "Иша"]];
+            // Наполняем тестовой строкой для примера
+            headers.push([1, "04:20", "06:05", "12:30", "16:15", "19:40", "21:10"]);
+            headers.push([2, "04:18", "06:03", "12:30", "16:16", "19:42", "21:12"]);
+            
+            const wb = XLSX.utils.book_new();
+            const ws = XLSX.utils.aoa_to_sheet(headers);
+            XLSX.utils.book_append_sheet(wb, ws, "Расписание");
+            
+            // Генерируем и скачиваем
+            XLSX.writeFile(wb, "Шаблон_Расписания_Намаза.xlsx");
+        }
+
+        function buildTable() {
+            const tableBody = document.getElementById('tableBody');
+            tableBody.innerHTML = "";
+            const today = new Date().getDate();
+            
+            for (let d = 1; d <= 31; d++) {
+                if (!monthlySchedule[d]) break;
+                const tr = document.createElement('tr');
+                if (d === today) tr.className = "active-row";
+                tr.innerHTML = `
+                    <td>${d}</td>
+                    <td>${monthlySchedule[d].fajr}</td>
+                    <td>${monthlySchedule[d].sunrise}</td>
+                    <td>${monthlySchedule[d].dhuhr}</td>
+                    <td>${monthlySchedule[d].asr}</td>
+                    <td>${monthlySchedule[d].maghrib}</td>
+                    <td>${monthlySchedule[d].isha}</td>
+                `;
+                tableBody.appendChild(tr);
+            }
+        }
+
+        function updateWidgetLogic() {
+            const now = new Date();
+            const currentDay = now.getDate();
+            const todayTimes = monthlySchedule[currentDay];
+
+            if (!todayTimes) return;
+
+            const timeObjects = {};
+            allKeys.forEach(key => {
+                const [h, m] = todayTimes[key].split(':').map(Number);
+                timeObjects[key] = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, 0);
+            });
+
+            allKeys.forEach(key => {
+                document.getElementById(`w1-time-${key}`).innerText = todayTimes[key];
+                document.getElementById(`w2-time-${key}`).innerText = todayTimes[key];
+                
+                document.getElementById(`w1-day-${key}`).classList.remove('active');
+                document.getElementById(`w2-day-${key}`).classList.remove('active');
+            });
+
+            let mainName = "", mainTime = "";
+            let subName = "", subTime = "";
+            let targetCountdownDate = null;
+            let startPeriodDate = null; 
+            let currentActiveBarId = '';
+            let statusLabelText = '';
+
+            if (now < timeObjects['fajr']) {
+                mainName = "Фаджр"; mainTime = todayTimes['fajr'];
+                subName = "Восход"; subTime = todayTimes['sunrise'];
+                targetCountdownDate = timeObjects['fajr'];
+                currentActiveBarId = 'isha'; 
+                statusLabelText = "До Фаджра";
+
+                const prevDay = currentDay - 1;
+                if (prevDay >= 1 && monthlySchedule[prevDay]) {
+                    const [h, m] = monthlySchedule[prevDay]['isha'].split(':').map(Number);
+                    startPeriodDate = new Date(now.getFullYear(), now.getMonth(), prevDay, h, m, 0);
+                } else {
+                    startPeriodDate = new Date(now.getFullYear(), now.getMonth(), currentDay - 1, 23, 0, 0);
+                }
+            } 
+            else if (now >= timeObjects['fajr'] && now < timeObjects['sunrise']) {
+                mainName = "Фаджр"; mainTime = todayTimes['fajr'];
+                subName = "Восход"; subTime = todayTimes['sunrise'];
+                targetCountdownDate = timeObjects['sunrise']; 
+                currentActiveBarId = 'fajr';
+                statusLabelText = "До Восхода";
+                startPeriodDate = timeObjects['fajr'];
+            } 
+            else if (now >= timeObjects['sunrise'] && now < timeObjects['dhuhr']) {
+                mainName = "Восход"; mainTime = todayTimes['sunrise'];
+                subName = "Зухр"; subTime = todayTimes['dhuhr'];
+                targetCountdownDate = timeObjects['dhuhr'];
+                currentActiveBarId = 'sunrise';
+                statusLabelText = "До Зухра";
+                startPeriodDate = timeObjects['sunrise'];
+            } 
+            else if (now >= timeObjects['dhuhr'] && now < timeObjects['asr']) {
+                mainName = "Зухр"; mainTime = todayTimes['dhuhr'];
+                subName = "Аср"; subTime = todayTimes['asr'];
+                targetCountdownDate = timeObjects['asr'];
+                currentActiveBarId = 'dhuhr';
+                statusLabelText = "До Асра";
+                startPeriodDate = timeObjects['dhuhr'];
+            } 
+            else if (now >= timeObjects['asr'] && now < timeObjects['maghrib']) {
+                mainName = "Аср"; mainTime = todayTimes['asr'];
+                subName = "Магриб"; subTime = todayTimes['maghrib'];
+                targetCountdownDate = timeObjects['maghrib'];
+                currentActiveBarId = 'asr';
+                statusLabelText = "До Магриба";
+                startPeriodDate = timeObjects['asr'];
+            } 
+            else if (now >= timeObjects['maghrib'] && now < timeObjects['isha']) {
+                mainName = "Магриб"; mainTime = todayTimes['maghrib'];
+                subName = "Иша"; subTime = todayTimes['isha'];
+                targetCountdownDate = timeObjects['isha'];
+                currentActiveBarId = 'maghrib';
+                statusLabelText = "До Иша";
+                startPeriodDate = timeObjects['maghrib'];
+            } 
+            else {
+                mainName = "Иша"; mainTime = todayTimes['isha'];
+                currentActiveBarId = 'isha';
+                statusLabelText = "До Фаджра";
+                startPeriodDate = timeObjects['isha'];
+
+                const nextDaySchedule = monthlySchedule[currentDay + 1];
+                if (nextDaySchedule) {
+                    subName = "Фаджр"; subTime = nextDaySchedule['fajr'];
+                    const [h, m] = nextDaySchedule['fajr'].split(':').map(Number);
+                    targetCountdownDate = new Date(now.getFullYear(), now.getMonth(), currentDay + 1, h, m, 0);
+                } else {
+                    subName = "Фаджр"; subTime = todayTimes['fajr'];
+                    const [h, m] = todayTimes['fajr'].split(':').map(Number);
+                    targetCountdownDate = new Date(now.getFullYear(), now.getMonth(), currentDay + 1, h, m, 0);
+                }
+            }
+
+            if (currentActiveBarId) {
+                document.getElementById(`w1-day-${currentActiveBarId}`).classList.add('active');
+                document.getElementById(`w2-day-${currentActiveBarId}`).classList.add('active');
+            }
+
+            let timeString = "00:00:00";
+            if (targetCountdownDate) {
+                const diffMs = targetCountdownDate - now;
+                const diffHrs = Math.floor(diffMs / (1000 * 60 * 60));
+                const diffMins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+                const diffSecs = Math.floor((diffMs % (1000 * 60)) / 1000);
+                timeString = `${String(diffHrs).padStart(2, '0')}:${String(diffMins).padStart(2, '0')}:${String(diffSecs).padStart(2, '0')}`;
+                
+                if (startPeriodDate) {
+                    const totalDuration = targetCountdownDate - startPeriodDate;
+                    const timePassed = now - startPeriodDate;
+                    
+                    let progressFactor = 1 - (timePassed / totalDuration);
+                    if (progressFactor < 0) progressFactor = 0;
+                    if (progressFactor > 1) progressFactor = 1;
+
+                    const fillPercent = progressFactor * 100; 
+
+                    document.getElementById('progressCircle').style.background = 
+                        `conic-gradient(from 0deg, transparent 0% ${100 - fillPercent}%, #1e7a53 ${100 - fillPercent}% 100%)`;
+                }
+            }
+
+            document.getElementById('mainName1').innerText = mainName;
+            document.getElementById('mainTime1').innerText = mainTime;
+            document.getElementById('subName1').innerText = subName;
+            document.getElementById('subTime1').innerText = subTime;
+            document.getElementById('timerValue1').innerText = timeString;
+
+            document.getElementById('mainName2').innerText = `${mainName} ${mainTime}`;
+            document.getElementById('subName2').innerText = `${subName} ${subTime}`;
+            document.getElementById('timerValue2').innerText = timeString;
+            document.getElementById('statusLabel').innerText = statusLabelText;
+        }
+    </script>
+</body>
+</html>
